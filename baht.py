@@ -2,6 +2,7 @@
 
 from datetime import datetime
 import logging
+import random
 import sys
 import argparse
 import re
@@ -42,6 +43,7 @@ class User(Base):
 
     posts = Column(Integer, default=0)
     reposts = Column(Integer, default=0)
+    reddit_posts = Column(Integer, default=0)
 
 
 def scrape_urls(bot, connection, event):
@@ -69,8 +71,7 @@ def scrape_urls(bot, connection, event):
                     posted_by=nickmask.nick,
                 )
                 session.add(u)
-                score = 1
-            else:
+            elif u.posted_by != nickmask.nick:
                 user.reposts += 1
                 ago = datetime.utcnow() - u.first_seen
                 say_to(bot, connection, event, "repost shitbag, {} posted this {}", u.posted_by, humanize.naturaltime(ago))
@@ -90,29 +91,53 @@ def take(n, iterable):
 
 
 class InvalidCommand(Exception):
-    pass
+    def __init__(self, msg='say what?', *args, **kwargs):
+        super(InvalidCommand, self).__init__(msg, *args, **kwargs)
 
 class Commands(object):
+
+    def score(self, bot, connection, event, args):
+        """return a user's score"""
+
+        user = Session().query(User).filter_by(nick=args[0]).first()
+        if not user:
+            raise InvalidCommand("eat shit")
+
+        percent = int(round(float(user.reposts) / float(user.posts) * 100))
+        say(bot, connection, "{0: >8} : posts: {1} / reposts: {2} ({3}%)", user.nick, user.posts, user.reposts, percent)
+
+    def help(self, bot, connection, event, args):
+        """say what?"""
+
+        command_names = [attr for attr in dir(self) if attr[0] != '_']
+        commands = {command_name: getattr(self, command_name) for command_name in command_names}
+
+        for command_name in sorted(command_names):
+            say(bot, connection, "{0: >8} : {1}", command_name, commands[command_name].__doc__)
+
     def url(self, bot, connection, event, args):
+        """find urls by nick or /regex/"""
 
         if len(args) == 0:
-            raise InvalidCommand('say what?')
+            raise InvalidCommand()
 
         if is_regex(args[0]):
             pattern_s = args[0][1:-1]
 
             try:
                 pattern = re.compile(pattern_s)
-                matches = take(5, (url for url in Session().query(Url) if pattern.search(url.url)))
+                matches = take(5, (url for url in Session().query(Url).sort_by(Url.last_seen.desc()) if pattern.search(url.url)))
             except:
                 raise InvalidCommand("say what? " + args[0])
         else:
             matches = Session().query(Url).filter_by(posted_by=args[0]).limit(5).all()
 
+
         if matches:
-            say_to(bot, connection, event, " | ".join([url.url for url in matches]))
+            say(bot, connection, " | ".join([url.url for url in matches]))
         else:
             say_to(bot, connection, event, "eat shit")
+
 
     def __call__(self, bot, connection, event):
         args = event.arguments[0].split()
@@ -134,11 +159,15 @@ def parse_command(bot, connection, event):
 
 is_command = lambda event: event.arguments[0].startswith('!')
 
+def say(bot, connection, fmt, *args, **kwargs):
+    connection.privmsg(bot.args.channel, fmt.format(*args, **kwargs))
+
 
 def say_to(bot, connection, event, fmt, *args, **kwargs):
     nickmask = NickMask(event.source)
     connection.privmsg(bot.args.channel, nickmask.nick + ": " + fmt.format(*args, **kwargs))
 
+GREETINGS = ['sup', 'ahoy', 'yo', 'high']
 
 class Bot(SimpleIRCClient):
     def __init__(self, args):
@@ -150,7 +179,15 @@ class Bot(SimpleIRCClient):
         connection.join(self.args.channel)
 
     def on_join(self, connection, event):
-        connection.privmsg(self.args.channel, "hello")
+
+        nickmask = NickMask(event.source)
+
+        greeting = random.choice(GREETINGS)
+
+        if nickmask.nick != self.args.nickname:
+            say_to(self, connection, event, greeting)
+        else:
+            say(self, connection, greeting)
 
     def on_disconnect(self, connection, event):
         raise SystemExit()
