@@ -1,16 +1,19 @@
 #!/usr/bin/env python
+
 from datetime import datetime
 import logging
-
 import sys
 import argparse
-
-import irc.client
-import irc.logging
 import re
+import humanize
+
+from irc.client import SimpleIRCClient, NickMask
+import irc.logging
+import itertools
 from sqlalchemy import Column, String, Integer, DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +39,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True)
     nick = Column(String, nullable=False, unique=True)
+
     posts = Column(Integer, default=0)
     reposts = Column(Integer, default=0)
 
@@ -45,10 +49,10 @@ def scrape_urls(bot, connection, event):
 
     session = Session()
 
-    nick = event.source.split('!')[0]
-    user = session.query(User).filter_by(nick=nick).first()
+    nickmask = NickMask(event.source)
+    user = session.query(User).filter_by(nick=nickmask.nick).first()
     if not user:
-        user = User(nick=nick)
+        user = User(nick=nickmask.nick)
         session.add(user)
         dirty = True
 
@@ -62,23 +66,81 @@ def scrape_urls(bot, connection, event):
             if not u:
                 u = Url(
                     url=url,
-                    posted_by=nick,
+                    posted_by=nickmask.nick,
                 )
                 session.add(u)
                 score = 1
             else:
                 user.reposts += 1
-                score = -1
+                ago = datetime.utcnow() - u.first_seen
+                say_to(bot, connection, event, "repost shitbag, {} posted this {}", u.posted_by, humanize.naturaltime(ago))
 
             u.last_seen = datetime.utcnow()
 
-            connection.privmsg(bot.args.channel, "{}: {}".format(nick, score))
             dirty = True
 
     if dirty:
         session.commit()
 
-class Bot(irc.client.SimpleIRCClient):
+is_regex = lambda s: s.startswith('/') and s.endswith('/')
+
+def take(n, iterable):
+    "Return first n items of the iterable as a list"
+    return list(itertools.islice(iterable, n))
+
+
+class InvalidCommand(Exception):
+    pass
+
+class Commands(object):
+    def url(self, bot, connection, event, args):
+
+        if len(args) == 0:
+            raise InvalidCommand('say what?')
+
+        if is_regex(args[0]):
+            pattern_s = args[0][1:-1]
+
+            try:
+                pattern = re.compile(pattern_s)
+                matches = take(5, (url for url in Session().query(Url) if pattern.search(url.url)))
+            except:
+                raise InvalidCommand("say what? " + args[0])
+        else:
+            matches = Session().query(Url).filter_by(posted_by=args[0]).limit(5).all()
+
+        if matches:
+            say_to(bot, connection, event, " | ".join([url.url for url in matches]))
+        else:
+            say_to(bot, connection, event, "eat shit")
+
+    def __call__(self, bot, connection, event):
+        args = event.arguments[0].split()
+        command_name = args[0][1:]
+        command = getattr(self, command_name, None)
+        if command:
+            try:
+                command(bot, connection, event, args[1:])
+            except InvalidCommand, e:
+                say_to(bot, connection, event, e.message)
+        else:
+            say_to(bot, connection, event, "wtf {}", command_name)
+
+
+def parse_command(bot, connection, event):
+    command = Commands()
+    command(bot, connection, event)
+
+
+is_command = lambda event: event.arguments[0].startswith('!')
+
+
+def say_to(bot, connection, event, fmt, *args, **kwargs):
+    nickmask = NickMask(event.source)
+    connection.privmsg(bot.args.channel, nickmask.nick + ": " + fmt.format(*args, **kwargs))
+
+
+class Bot(SimpleIRCClient):
     def __init__(self, args):
         super(Bot, self).__init__()
         self.args = args
@@ -94,7 +156,12 @@ class Bot(irc.client.SimpleIRCClient):
         raise SystemExit()
 
     def on_pubmsg(self, connection, event):
-        scrape_urls(self, connection, event)
+
+        if is_command(event):
+            parse_command(self, connection, event)
+        else:
+            scrape_urls(self, connection, event)
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -104,6 +171,7 @@ def get_args():
     parser.add_argument('-p', '--port', default=6667, type=int)
     irc.logging.add_arguments(parser)
     return parser.parse_args()
+
 
 def main():
     args = get_args()
