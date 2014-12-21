@@ -3,6 +3,7 @@
 from datetime import datetime
 import logging
 import random
+import ssl
 import sys
 import argparse
 import re
@@ -11,6 +12,7 @@ import humanize
 from irc.client import SimpleIRCClient, NickMask
 import irc.logging
 import itertools
+import requests
 from sqlalchemy import Column, String, Integer, DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -46,8 +48,19 @@ class User(Base):
     reddit_posts = Column(Integer, default=0)
 
 
+def fetch_reddit():
+    headers = {
+        'User-Agent': 'baht 0'
+    }
+
+    resp = requests.get('https://www.reddit.com/.json?limit=100', headers=headers)
+    if resp.status_code != 200:
+        return {}
+
+    return {child['data']['url']: child['data'] for child in resp.json()['data']['children']}
+
+
 def scrape_urls(bot, connection, event):
-    dirty = False
 
     session = Session()
 
@@ -56,32 +69,34 @@ def scrape_urls(bot, connection, event):
     if not user:
         user = User(nick=nickmask.nick)
         session.add(user)
-        dirty = True
-
-    for arg in event.arguments:
-        for url in URL_PATTERN.findall(arg):
-            log.debug('matched: %s', url)
-
-            user.posts += 1
-
-            u = session.query(Url).filter_by(url=url).first()
-            if not u:
-                u = Url(
-                    url=url,
-                    posted_by=nickmask.nick,
-                )
-                session.add(u)
-            elif u.posted_by != nickmask.nick:
-                user.reposts += 1
-                ago = datetime.utcnow() - u.first_seen
-                say_to(bot, connection, event, "repost shitbag, {} posted this {}", u.posted_by, humanize.naturaltime(ago))
-
-            u.last_seen = datetime.utcnow()
-
-            dirty = True
-
-    if dirty:
         session.commit()
+
+    urls = [url for arg in event.arguments for url in URL_PATTERN.findall(arg)]
+
+    reddit_urls = fetch_reddit() if urls else {}
+
+    for url in urls:
+
+        u = session.query(Url).filter_by(url=url).first()
+        if not u:
+            u = Url(
+                url=url,
+                posted_by=nickmask.nick,
+            )
+            user.posts += 1
+            session.add(u)
+
+        u.last_seen = datetime.utcnow()
+        print url
+        if url in reddit_urls.keys():
+            user.reddit_posts += 1
+            say_to(bot, connection, event, "anything else from reddit bruh?")
+        elif u.posted_by != nickmask.nick:
+            user.reposts += 1
+            ago = datetime.utcnow() - u.first_seen
+            say_to(bot, connection, event, "repost shitbag, {} posted this {}", u.posted_by, humanize.naturaltime(ago))
+
+    session.commit()
 
 is_regex = lambda s: s.startswith('/') and s.endswith('/')
 
@@ -99,12 +114,17 @@ class Commands(object):
     def score(self, bot, connection, event, args):
         """return a user's score"""
 
+        if len(args) == 0:
+            raise InvalidCommand
+
         user = Session().query(User).filter_by(nick=args[0]).first()
         if not user:
             raise InvalidCommand("eat shit")
 
-        percent = int(round(float(user.reposts) / float(user.posts) * 100))
-        say(bot, connection, "{0: >8} : posts: {1} / reposts: {2} ({3}%)", user.nick, user.posts, user.reposts, percent)
+        percent = lambda a, b: int(round(float(a) / float(b) * 100))
+        say(bot, connection,
+            "{0: >8} : posts: {1} / reposts: {2} ({3}%) / reddit: {4} ({5}%)",
+            user.nick, user.posts, user.reposts, percent(user.reposts, user.posts), user.reddit_posts, percent(user.reddit_posts, user.posts))
 
     def help(self, bot, connection, event, args):
         """say what?"""
@@ -125,19 +145,18 @@ class Commands(object):
             pattern_s = args[0][1:-1]
 
             try:
+                query = Session().query(Url).sort_by(Url.last_seen.desc())
                 pattern = re.compile(pattern_s)
-                matches = take(5, (url for url in Session().query(Url).sort_by(Url.last_seen.desc()) if pattern.search(url.url)))
+                matches = take(5, (url for url in query if pattern.search(url.url)))
             except:
                 raise InvalidCommand("say what? " + args[0])
         else:
             matches = Session().query(Url).filter_by(posted_by=args[0]).limit(5).all()
 
-
         if matches:
             say(bot, connection, " | ".join([url.url for url in matches]))
         else:
             say_to(bot, connection, event, "eat shit")
-
 
     def __call__(self, bot, connection, event):
         args = event.arguments[0].split()
@@ -205,7 +224,7 @@ def get_args():
     parser.add_argument('server')
     parser.add_argument('nickname')
     parser.add_argument('channel')
-    parser.add_argument('-p', '--port', default=6667, type=int)
+    parser.add_argument('-p', '--port', default=9999, type=int)
     irc.logging.add_arguments(parser)
     return parser.parse_args()
 
@@ -222,7 +241,13 @@ def main():
     bot = Bot(args)
 
     try:
-        bot.connect(args.server, args.port, args.nickname)
+        ssl_factory = irc.connection.Factory(wrapper=ssl.wrap_socket)
+        bot.connect(
+            args.server,
+            args.port,
+            args.nickname,
+            connect_factory=ssl_factory
+        )
     except irc.client.ServerConnectionError as x:
         print(x)
         sys.exit(1)
