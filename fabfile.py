@@ -6,7 +6,7 @@ from fabric.operations import run
 
 
 def virtualenv(name):
-    return "source " + os.path.join("/", "home", "marc", ".virtualenvs", name, "bin", "activate")
+    return "source " + os.path.join(".virtualenvs", name, "bin", "activate")
 
 @task
 def upload():
