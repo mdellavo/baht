@@ -26,6 +26,7 @@ URL_PATTERN = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%
 
 Session = sessionmaker()
 
+ANNOY = False
 
 class Url(Base):
     __tablename__ = 'urls'
@@ -90,7 +91,8 @@ def scrape_urls(bot, connection, event):
         print url
         if url in reddit_urls.keys():
             user.reddit_posts += 1
-            say_to(bot, connection, event, "anything else from reddit bruh?")
+            if ANNOY:
+                say_to(bot, connection, event, "anything else from reddit bruh?")
         elif u.posted_by != nickmask.nick:
             user.reposts += 1
             ago = datetime.utcnow() - u.first_seen
@@ -203,10 +205,11 @@ class Bot(SimpleIRCClient):
 
         greeting = random.choice(GREETINGS)
 
-        if nickmask.nick != self.args.nickname:
-            say_to(self, connection, event, greeting)
-        else:
-            say(self, connection, greeting)
+        if ANNOY:
+            if nickmask.nick != self.args.nickname:
+                say_to(self, connection, event, greeting)
+            else:
+                say(self, connection, greeting)
 
     def on_disconnect(self, connection, event):
         raise SystemExit()
@@ -252,7 +255,11 @@ def main():
         print(x)
         sys.exit(1)
 
-    bot.start()
+    try:
+        bot.start()
+    except KeyboardInterrupt:
+        bot.reactor.disconnect_all("eat shit")
+
 
 if __name__ == '__main__':
     main()

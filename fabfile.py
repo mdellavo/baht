@@ -20,7 +20,7 @@ def init_env():
 
 @task
 def spawn(host, nick, channel):
-    run("tmux new-window -n \"baht:{}:{}\" '{} && python ~/baht/baht.py {} {} \"{}\"'".format(virtualenv("baht"), host, nick, host, nick, channel))
+    run("tmux new-window -n \"baht\" '{} && python ~/baht/baht.py {} {} \"{}\"'".format(virtualenv("baht"), host, nick, channel))
 
 @task
 def deploy(host, nick, channel):
