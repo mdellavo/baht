@@ -153,7 +153,7 @@ class Commands(object):
             except:
                 raise InvalidCommand("say what? " + args[0])
         else:
-            matches = Session().query(Url).filter_by(posted_by=args[0]).limit(5).all()
+            matches = Session().query(Url).filter_by(posted_by=args[0]).sort_by(Url.last_seen.desc()).limit(5).all()
 
         if matches:
             say(bot, connection, " | ".join([url.url for url in matches]))
