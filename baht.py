@@ -17,8 +17,7 @@ from sqlalchemy import Column, String, Integer, DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-
-log = logging.getLogger(__name__)
+log = logging.getLogger('baht')
 
 Base = declarative_base()
 
@@ -147,13 +146,14 @@ class Commands(object):
             pattern_s = args[0][1:-1]
 
             try:
-                query = Session().query(Url).sort_by(Url.last_seen.desc())
+                query = Session().query(Url).order_by(Url.last_seen.desc())
                 pattern = re.compile(pattern_s)
                 matches = take(5, (url for url in query if pattern.search(url.url)))
             except:
+                log.exception("error querying")
                 raise InvalidCommand("say what? " + args[0])
         else:
-            matches = Session().query(Url).filter_by(posted_by=args[0]).sort_by(Url.last_seen.desc()).limit(5).all()
+            matches = Session().query(Url).filter_by(posted_by=args[0]).order_by(Url.last_seen.desc()).limit(5).all()
 
         if matches:
             say(bot, connection, " | ".join([url.url for url in matches]))
@@ -235,7 +235,16 @@ def get_args():
 def main():
     args = get_args()
 
-    engine = create_engine('sqlite:///baht.db', echo=True)
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    root.addHandler(ch)
+
+    engine = create_engine('sqlite:///baht.db')
     Base.metadata.create_all(engine)
     Session.configure(bind=engine)
 
