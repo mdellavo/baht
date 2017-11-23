@@ -153,13 +153,14 @@ def is_command(event):
 
 
 class Bot(SingleServerIRCBot):
-    def __init__(self, server_address, name, channel):
+    def __init__(self, server_address, name, channel, ignore=None):
         super(Bot, self).__init__([server_address], name, name,
                                   recon=ExponentialBackoff(min_interval=RECONNECT_TIMEOUT,
                                                            max_interval=2 * RECONNECT_TIMEOUT),
                                   connect_factory=Factory(wrapper=ssl.wrap_socket))
         self.name = name
         self.channel = channel
+        self.ignore = ignore or []
 
     @property
     def server_host(self):
@@ -180,6 +181,9 @@ class Bot(SingleServerIRCBot):
         connection.join(self.channel)
 
     def on_join(self, connection, event):
+        if event.source.nick in self.ignore:
+            return
+
         greeting = random.choice(GREETINGS)
 
         if event.source.nick != self.name:
@@ -188,6 +192,9 @@ class Bot(SingleServerIRCBot):
             self.say(greeting)
 
     def on_pubmsg(self, connection, event):
+        if event.source.nick in self.ignore:
+            return
+
         if is_command(event):
             parse_command(self, event)
         elif event.source.nick != self.name:
@@ -200,6 +207,7 @@ def get_args():
     parser.add_argument('name')
     parser.add_argument('channel')
     parser.add_argument('-p', '--port', default=9999, type=int)
+    parser.add_argument('-i', '--ignore', action='append')
     return parser.parse_args()
 
 
