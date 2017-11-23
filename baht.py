@@ -232,7 +232,7 @@ def main():
     if channel[0] != '#':
         channel = "#" + channel
 
-    bot = Bot(server_address, name, channel)
+    bot = Bot(server_address, name, channel, ignore=args.ignore)
 
     try:
         bot.start()
