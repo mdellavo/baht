@@ -133,7 +133,7 @@ class Commands(object):
             return
 
         json = response.json()
-        if not json["data"]["allow_images"]:
+        if not json["data"].get("allow_images"):
             return
         url, title = (json["data"][k] for k in ("url", "title"))
         bot.say("r/{} - https://imgur.com{}", title, url)
