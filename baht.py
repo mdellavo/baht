@@ -97,18 +97,14 @@ class Commands(object):
         if not user:
             return
 
-        percent = lambda a, b: int(round(float(a) / float(b) * 100)) if b > 0 else 0
+        percent = lambda a, b: int(round(float(a) / float(a + b) * 100)) if (a + b) > 0 else 0
         bot.say("{0: >8} : posts: {1} / reposts: {2} ({3}%)",
                 user.nick, user.posts, user.reposts, percent(user.reposts, user.posts))
 
     def help(self, bot, event, args):
         """say what?"""
-
         command_names = [attr for attr in dir(self) if attr[0] != '_']
-        commands = {command_name: getattr(self, command_name) for command_name in command_names}
-
-        for command_name in sorted(command_names):
-            bot.say("{0: >8} : {1}", command_name, commands[command_name].__doc__)
+        bot.say(" | ".join(sorted(command_names)))
 
     def url(self, bot, event, args):
         """find urls by nick or /regex/"""
@@ -179,17 +175,6 @@ class Bot(SingleServerIRCBot):
     def on_welcome(self, connection, event):
         log.info('connected to %s, joining %s...', self.server_host, self.channel)
         connection.join(self.channel)
-
-    def on_join(self, connection, event):
-        if event.source.nick in self.ignore:
-            return
-
-        greeting = random.choice(GREETINGS)
-
-        if event.source.nick != self.name:
-            self.say_to(event, greeting)
-        else:
-            self.say(greeting)
 
     def on_pubmsg(self, connection, event):
         if event.source.nick in self.ignore:
