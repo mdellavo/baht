@@ -127,16 +127,16 @@ class Commands(object):
         if len(args) == 0:
             return
 
-        about_url = "https://reddit.com/r/{}/about.json"
-        response = requests.get(about_url)
+        about_url = "https://reddit.com/r/{}/about.json".format(args[0])
+        response = requests.get(about_url, headers={"User-Agent": USER_AGENT})
         if response.status_code != 200:
             return
 
         json = response.json()
         if not json["data"]["allow_images"]:
             return
-        url, title, description = (json["data"][k] for k in ("url", "title", "public_description"))
-        bot.say("{} - {} - https://imgur.com{}", title, description, url)
+        url, title = (json["data"][k] for k in ("url", "title"))
+        bot.say("r/{} - https://imgur.com{}", title, url)
 
     def __call__(self, bot, event):
         args = event.arguments[0].split()
