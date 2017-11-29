@@ -2,7 +2,6 @@
 
 from datetime import datetime
 import logging
-import random
 import ssl
 import sys
 import argparse
@@ -10,6 +9,7 @@ import re
 import itertools
 
 import humanize
+import requests
 
 from irc.bot import SingleServerIRCBot, ExponentialBackoff
 from irc.connection import Factory
@@ -22,7 +22,7 @@ log = logging.getLogger('baht')
 
 RECONNECT_TIMEOUT = 5
 URL_PATTERN = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
-GREETINGS = ['sup', 'ahoy', 'yo', 'high']
+USER_AGENT = "baht 1.0"
 
 Base = declarative_base()
 Session = sessionmaker()
@@ -126,7 +126,17 @@ class Commands(object):
     def reddit(self, bot, event, args):
         if len(args) == 0:
             return
-        bot.say("https://imgur.com/r/{}", args[0])
+
+        about_url = "https://reddit.com/r/{}/about.json"
+        response = requests.get(about_url)
+        if response.status_code != 200:
+            return
+
+        json = response.json()
+        if not json["data"]["allow_images"]:
+            return
+        url, title, description = (json["data"][k] for k in ("url", "title", "public_description"))
+        bot.say("{} - {} - https://imgur.com{}", title, description, url)
 
     def __call__(self, bot, event):
         args = event.arguments[0].split()
