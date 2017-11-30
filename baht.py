@@ -7,6 +7,7 @@ import sys
 import argparse
 import re
 import itertools
+import random
 
 import humanize
 import requests
@@ -26,6 +27,9 @@ USER_AGENT = "baht 1.0"
 
 Base = declarative_base()
 Session = sessionmaker()
+
+REDDIT_HISTORY = []
+REDDIT_HISTORY_MAX = 1000
 
 
 class Url(Base):
@@ -127,16 +131,39 @@ class Commands(object):
         if len(args) == 0:
             return
 
-        about_url = "https://reddit.com/r/{}/about.json".format(args[0])
+        about_url = "https://reddit.com/r/{}.json".format(args[0])
         response = requests.get(about_url, headers={"User-Agent": USER_AGENT})
         if response.status_code != 200:
             return
 
         json = response.json()
-        if not json["data"].get("allow_images"):
+
+        def is_image(child):
+            return child["kind"] == "t3" and child["data"].get("thumbnail", "").startswith("http")
+
+        session = Session()
+        items = [child["data"] for child in json["data"]["children"] if is_image(child)]
+        found = None
+        for i in range(len(items)):
+            candidate = random.choice(items)
+            url = candidate["url"]
+
+            exists = session.query(Url).filter_by(url=url).first()
+            if not exists and url not in REDDIT_HISTORY:
+                found = candidate
+                break
+
+            items.remove(candidate)
+        if not found:
             return
-        url, title = (json["data"][k] for k in ("url", "title"))
-        bot.say("r/{} - https://imgur.com{}", title, url)
+
+        title = found["title"]
+        url = found["url"]
+        bot.say("{} - {}", url, title)
+
+        REDDIT_HISTORY.append(url)
+        while len(REDDIT_HISTORY) > REDDIT_HISTORY_MAX:
+            REDDIT_HISTORY.pop(0)
 
     def __call__(self, bot, event):
         args = event.arguments[0].split()
