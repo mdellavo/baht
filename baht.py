@@ -190,7 +190,7 @@ class Commands(object):
         if not GIFY_API_KEY:
             raise ValueError("GIFY_API_KEY is not set")
 
-        response = requests.get("http://api.giphy.com/v1/gifs/random", params={"api_key": GIFY_API_KEY, "tag": args[0], "rating": "x"})
+        response = requests.get("http://api.giphy.com/v1/gifs/random", params={"api_key": GIFY_API_KEY, "tag": args[0], "rating": "nc-17"})
         if response.status_code != 200:
             log.error("invalid response: %s", response)
             return
