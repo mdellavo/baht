@@ -104,7 +104,7 @@ class Commands(object):
         if not args:
             return
 
-        rv = emoji.emojize(":" + args[0] + ":")
+        rv = emoji.emojize(":" + args[0] + ":", use_aliases=True)
         if rv:
             bot.say(rv)
 
