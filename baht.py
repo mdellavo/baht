@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
-from datetime import datetime
-import logging
+import os
+import re
 import ssl
 import sys
-import argparse
-import re
-import itertools
 import random
+import logging
+import argparse
+import itertools
+from datetime import datetime
 
 import humanize
 import requests
@@ -30,6 +31,8 @@ Session = sessionmaker()
 
 REDDIT_HISTORY = []
 REDDIT_HISTORY_MAX = 1000
+
+GIFY_API_KEY = os.environ.get("GIFY_API_KEY")
 
 
 class Url(Base):
@@ -134,6 +137,7 @@ class Commands(object):
         about_url = "https://reddit.com/r/{}.json".format(args[0])
         response = requests.get(about_url, headers={"User-Agent": USER_AGENT})
         if response.status_code != 200:
+            log.error("invalid response: %s", response)
             return
 
         json = response.json()
@@ -164,6 +168,22 @@ class Commands(object):
         REDDIT_HISTORY.append(url)
         while len(REDDIT_HISTORY) > REDDIT_HISTORY_MAX:
             REDDIT_HISTORY.pop(0)
+
+    def gif(self, bot, event, args):
+        if len(args) == 0:
+            return
+
+        if not GIFY_API_KEY:
+            raise ValueError("GIFY_API_KEY is not set")
+
+        response = requests.get("http://api.giphy.com/v1/gifs/random", params={"api_key": GIFY_API_KEY, "tag": args[0]})
+        if response.status_code != 200:
+            log.error("invalid response: %s", response)
+            return
+
+        json = response.json()
+        image_url = json["data"]["image_url"]
+        bot.say(image_url)
 
     def __call__(self, bot, event):
         args = event.arguments[0].split()
