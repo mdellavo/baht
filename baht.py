@@ -105,7 +105,7 @@ class Commands(object):
             return
 
         rv = emoji.emojize(":" + args[0] + ":", use_aliases=True)
-        if rv:
+        if args[0] not in rv:
             bot.say(rv)
 
     def score(self, bot, event, args):
