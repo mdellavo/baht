@@ -15,10 +15,14 @@ import requests
 
 from irc.bot import SingleServerIRCBot, ExponentialBackoff
 from irc.connection import Factory
+from irc.client import ServerConnection
 
 from sqlalchemy import Column, String, Integer, DateTime, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+
+from jaraco.stream import buffer
+ServerConnection.buffer_class = buffer.LenientDecodingLineBuffer
 
 log = logging.getLogger('baht')
 
