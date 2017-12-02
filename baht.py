@@ -10,6 +10,7 @@ import argparse
 import itertools
 from datetime import datetime
 
+import emoji
 import humanize
 import requests
 
@@ -98,10 +99,19 @@ def take(n, iterable):
 
 
 class Commands(object):
+
+    def emoji(self, bot, event, args):
+        if not args:
+            return
+
+        rv = emoji.emojize(":" + args[0] + ":")
+        if rv:
+            bot.say(rv)
+
     def score(self, bot, event, args):
         """return a user's score"""
 
-        if len(args) == 0:
+        if not args:
             return
 
         user = Session().query(User).filter_by(nick=args[0]).first()
@@ -120,7 +130,7 @@ class Commands(object):
     def url(self, bot, event, args):
         """find urls by nick or /regex/"""
 
-        if len(args) == 0:
+        if not args:
             return
 
         if is_regex(args[0]):
@@ -135,7 +145,7 @@ class Commands(object):
             bot.say(u" | ".join([url.url for url in matches]))
 
     def reddit(self, bot, event, args):
-        if len(args) == 0:
+        if not args:
             return
 
         about_url = "https://reddit.com/r/{}.json".format(args[0])
@@ -174,7 +184,7 @@ class Commands(object):
             REDDIT_HISTORY.pop(0)
 
     def gif(self, bot, event, args):
-        if len(args) == 0:
+        if not args:
             return
 
         if not GIFY_API_KEY:

@@ -2,3 +2,4 @@ irc
 sqlalchemy
 humanize
 requests
+emoji
