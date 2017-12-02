@@ -2,4 +2,3 @@ irc
 sqlalchemy
 humanize
 requests
-fabric

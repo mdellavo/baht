@@ -105,13 +105,13 @@ class Commands(object):
             return
 
         percent = lambda a, b: int(round(float(a) / float(a + b) * 100)) if (a + b) > 0 else 0
-        bot.say("{0: >8} : posts: {1} / reposts: {2} ({3}%)",
+        bot.say(u"{0: >8} : posts: {1} / reposts: {2} ({3}%)",
                 user.nick, user.posts, user.reposts, percent(user.reposts, user.posts))
 
     def help(self, bot, event, args):
         """say what?"""
         command_names = [attr for attr in dir(self) if attr[0] != '_']
-        bot.say(" | ".join(sorted(command_names)))
+        bot.say(u" | ".join(sorted(command_names)))
 
     def url(self, bot, event, args):
         """find urls by nick or /regex/"""
@@ -128,7 +128,7 @@ class Commands(object):
             matches = Session().query(Url).filter_by(posted_by=args[0]).order_by(Url.last_seen.desc()).limit(5).all()
 
         if matches:
-            bot.say(" | ".join([url.url for url in matches]))
+            bot.say(u" | ".join([url.url for url in matches]))
 
     def reddit(self, bot, event, args):
         if len(args) == 0:
@@ -163,7 +163,7 @@ class Commands(object):
 
         title = found["title"]
         url = found["url"]
-        bot.say("{} - {}", url, title)
+        bot.say(u"{} - {}", url, title)
 
         REDDIT_HISTORY.append(url)
         while len(REDDIT_HISTORY) > REDDIT_HISTORY_MAX:
@@ -224,10 +224,10 @@ class Bot(SingleServerIRCBot):
         return self.server_list[0].port
 
     def say(self, fmt, *args, **kwargs):
-        self.connection.privmsg(self.channel, fmt.format(*args, **kwargs))
+        self.connection.privmsg(self.channel, unicode(fmt).format(*args, **kwargs))
 
     def say_to(self, event, fmt, *args, **kwargs):
-        self.connection.privmsg(self.channel, event.source.nick + ": " + fmt.format(*args, **kwargs))
+        self.say(event.source.nick + u": " + fmt, *args, **kwargs)
 
     def on_welcome(self, connection, event):
         log.info('connected to %s, joining %s...', self.server_host, self.channel)
