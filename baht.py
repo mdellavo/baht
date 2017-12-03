@@ -196,6 +196,8 @@ class Commands(object):
             return
 
         json = response.json()
+        if not json["data"]:
+            return
         image_url = json["data"]["image_url"]
         bot.say(image_url)
 
